@@ -19,13 +19,13 @@
 
 #### You'll see a live mock-up of your:
 
-Wallet Address (shortened)
+- Wallet Address (shortened)
 
-Network
+- Network
 
-Credit Score
+- Credit Score
 
-Lending / Borrowing Stats
+- Lending / Borrowing Stats
 
 # 🧪 Development
 ### 📦 Install dependencies
@@ -46,28 +46,27 @@ cd contract
 soroban build
 ```
 
-📸 UI Snapshot
+# 📸 UI Snapshot
 
+![Uygulama Ana Ekran Görüntüsü](firstcontent.png)
+![Uygulama Ana Ekran Görüntüsü](secondcontent.png)
     
 
 # 📌 Future Work
 
-    ✅ Real-time loan contracts
+- ####   ✅ Real-time loan contracts
 
-    🔍 Credit analysis based on actual on-chain behavior
+- ####   🔍 Credit analysis based on actual on-chain behavior
 
-    🌍 Deploy to Futurenet/Testnet
+- ####   🌍 Deploy to Futurenet/Testnet
 
-    🧠 Use machine learning for credit scoring (as a service)
+- ####   🧠 Use machine learning for credit scoring (as a service)
 
-# 🤝 Contributing
+# 🔗 Links:
+- 🌐 [Stellar Developer Docs](https://developers.stellar.org/docs/)
+- 🔧 [Soroban Documentation](https://soroban.stellar.org/docs)
+- 💼 [Freighter Wallet](https://freighter.app/)
 
-    Fork this repo
+<hr>
 
-    Create a new branch: git checkout -b feature-name
-
-    Make your changes
-
-    Push and create a PR
-
-Built with ❤️ by efyilmaz for the Stellar Hackathon.
+##### Built with ❤️ and 🤖 by Efe Yılmaz (Thorizodrago) for the Stellar AI Supported Project Development Workshop
