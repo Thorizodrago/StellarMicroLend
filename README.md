@@ -15,37 +15,40 @@
 #### 2- Open the app.
 #### 3- Click on "Freighter Cüzdanını Bağla"
 #### 4- Grant permission via Freighter.
+<hr> 
 
-You'll see a live mock-up of your:
+#### You'll see a live mock-up of your:
 
-    Wallet Address (shortened)
+Wallet Address (shortened)
 
-    Network
+Network
 
-    Credit Score (color coded)
+Credit Score
 
-    Lending / Borrowing Stats
+Lending / Borrowing Stats
 
 # 🧪 Development
 ### 📦 Install dependencies
-<pre>
-<code>
-cd app 
-npm install 
-</pre>
-</code>
-🚀 Run Next.js frontend
+```bash
+cd app
+npm install
+```
+# 🚀 Run Next.js frontend
 
+```bash
 npm run dev
+```
 
-🛠️ Build & deploy Soroban contracts (optional)
+# 🛠️ Build & deploy Soroban contracts (optional)
 
+```bash
 cd contract
 soroban build
+```
 
 📸 UI Snapshot
 
-    🖥️ Elegant dark UI, adaptive layout with intuitive feedback
+    
 
 # 📌 Future Work
 
