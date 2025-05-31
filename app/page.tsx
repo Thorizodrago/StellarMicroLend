@@ -1,466 +1,648 @@
 "use client";
+
 import React, { useEffect, useState } from "react";
 
-// Freighter API mock for demo (replace with actual freighter import)
-const freighterApi = {
-  isConnected: async () => Math.random() > 0.5,
-  isAllowed: async () => true,
-  setAllowed: async () => new Promise(resolve => setTimeout(resolve, 1000)),
-  getAddress: async () => ({ address: "GDQNY3PBOJOKYZSRMK2S7LHHGWZIUISD4QORETLMXEWXBI7KFZZMKTL3" }),
-  getNetwork: async () => ({ network: "PUBLIC" })
-
-};
+import freighterApi, {
+  isConnected,
+  isAllowed,
+  getAddress,
+  getNetwork,
+  requestAccess,
+} from "@stellar/freighter-api";
 
 interface UserProfile {
   creditScore: number;
   totalLent: number;
   totalBorrowed: number;
   activeLoans: number;
+  walletAddress: string;
+  network: string;
 }
 
 export default function StellarMicroLendWallet() {
-  const [publicKey, setPublicKey] = useState<string | null>(null);
+  const [mounted, setMounted] = useState(false);
+  const [isFreighterAvailable, setIsFreighterAvailable] = useState(false);
   const [isConnecting, setIsConnecting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
-  const [network, setNetwork] = useState<string>("UNKNOWN");
 
+  // Render until mount
   useEffect(() => {
-    const mockProfile: UserProfile = {
-      creditScore: Math.floor(Math.random() * 300) + 500,
-      totalLent: Math.floor(Math.random() * 10000),
-      totalBorrowed: Math.floor(Math.random() * 5000),
-      activeLoans: Math.floor(Math.random() * 5)
-    };
-    setUserProfile(mockProfile);
+    setMounted(true);
   }, []);
 
-  const loadUserProfile = async (address: string) => {
-    // const mockProfile: UserProfile = {
-    //   creditScore: Math.floor(Math.random() * 300) + 500,
-    //   totalLent: Math.floor(Math.random() * 10000),
-    //   totalBorrowed: Math.floor(Math.random() * 5000),
-    //   activeLoans: Math.floor(Math.random() * 5)
-    // };
-    // setUserProfile(mockProfile);
+  // Check frigher is downloaded and check permission
+  useEffect(() => {
+    if (!mounted) return;
+
+    const checkFreighter = async () => {
+      try {
+        // Call isConnected()
+        const connRes = await isConnected();
+        if (connRes.isConnected) {
+          setIsFreighterAvailable(true);
+          const allowedRes = await isAllowed();
+          if (allowedRes.isAllowed) {
+            await loadWallet();
+          }
+        } else {
+          setIsFreighterAvailable(false);
+        }
+      } catch (err) {
+        console.error("Freighter check error:", err);
+        setIsFreighterAvailable(false);
+      }
+    };
+
+    // Delay for extension load
+    const timeoutId = setTimeout(checkFreighter, 500);
+    return () => clearTimeout(timeoutId);
+  }, [mounted]);
+
+  // Load Wallet info: publicKey & network
+  const loadWallet = async () => {
+    try {
+      // Get publicKey
+      const pkRes = await getAddress();
+      if (!pkRes?.address) {
+        throw new Error("Cannot get public key.");
+      }
+      const netRes = await getNetwork();
+      if (!netRes?.network) {
+        throw new Error("Cannot get network informations.");
+      }
+      await loadUserProfile(pkRes.address, netRes.network);
+    } catch (err) {
+      console.error("Wallet load error:", err);
+      setError("Cannot get wallet info");
+      setUserProfile(null);
+    }
   };
 
+  // Mock and data produce 
+  const loadUserProfile = async (walletAddress: string, network: string) => {
+    const hash = walletAddress.split("").reduce((a, b) => {
+      a = (a << 5) - a + b.charCodeAt(0);
+      return a & a;
+    }, 0);
+
+    const mockProfile: UserProfile = {
+      creditScore: 500 + Math.abs(hash % 300),
+      totalLent: Math.abs(hash % 10000),
+      totalBorrowed: Math.abs(hash % 5000),
+      activeLoans: Math.abs(hash % 5),
+      walletAddress,
+      network,
+    };
+    setUserProfile(mockProfile);
+  };
+
+  // Connect button function
   const handleConnectWallet = async () => {
     setIsConnecting(true);
     setError(null);
 
     try {
-      await freighterApi.setAllowed();
-      const { address } = await freighterApi.getAddress();
-      const { network: networkName } = await freighterApi.getNetwork();
+      // If there is no wallet, throw error.
+      const connRes = await isConnected();
+      if (!connRes.isConnected) {
+        throw new Error("Freighter wallet not detected in current browser");
+      }
 
-      setPublicKey(address);
-      setNetwork(networkName);
-      loadUserProfile(address);
+      // If no permission, ask for permission
+      const allowedRes = await isAllowed();
+      if (!allowedRes.isAllowed) {
+        // requestAccess, routes user to Frighter
+        const accessRes = await requestAccess();
+        if (accessRes.error) {
+          throw new Error(accessRes.error);
+        }
+      }
 
-    } catch (error) {
-      console.error("Cüzdan bağlantı hatası:", error);
-      setError("Cüzdan bağlanırken bir hata oluştu. Kullanıcı bağlantıyı reddetti veya bir sorun yaşandı.");
+      // If permission accepted get publicKey & network and load profile
+      const pkRes = await getAddress();
+      const netRes = await getNetwork();
+      if (!pkRes?.address || !netRes?.network) {
+        throw new Error("Cannot get wallet info");
+      }
+      await loadUserProfile(pkRes.address, netRes.network);
+    } catch (err) {
+      console.error("Connection error:", err);
+      setError(err instanceof Error ? err.message : "Connection error");
     } finally {
       setIsConnecting(false);
     }
   };
 
+  // Cut the connection: set userProfile null
   const handleDisconnect = () => {
-    setPublicKey(null);
     setUserProfile(null);
-    setNetwork("UNKNOWN");
     setError(null);
   };
 
+  // Cut the adress for better look
   const truncateAddress = (addr: string) =>
     `${addr.slice(0, 8)}...${addr.slice(-8)}`;
 
+  // Credit score color
   const getCreditScoreColor = (score: number) => {
     if (score >= 750) return "#10b981";
     if (score >= 650) return "#f59e0b";
     return "#ef4444";
   };
 
+  // Show credit score in labels
   const getCreditScoreLabel = (score: number) => {
-    if (score >= 750) return "Mükemmel";
-    if (score >= 650) return "İyi";
-    return "Orta";
+    if (score >= 750) return "Highly Good";
+    if (score >= 650) return "Good";
+    return "Medium";
   };
 
-  const styles = {
-    container: {
-      maxWidth: '800px',
-      margin: '32px auto',
-      padding: '24px',
-      background: 'linear-gradient(135deg, #1f2937 0%, #111827 100%)',
-      color: '#f9fafb',
-      borderRadius: '12px',
-      boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)',
-      border: '1px solid #374151',
-      fontFamily: 'system-ui, -apple-system, sans-serif'
-    },
-    header: {
-      display: 'flex',
-      alignItems: 'center',
-      justifyContent: 'space-between',
-      marginBottom: '24px'
-    },
-    headerLeft: {
-      display: 'flex',
-      alignItems: 'center',
-      gap: '12px'
-    },
-    logoBox: {
-      padding: '8px',
-      backgroundColor: '#2563eb',
-      borderRadius: '8px',
-      fontSize: '20px'
-    },
-    title: {
-      fontSize: '24px',
-      fontWeight: 'bold',
-      color: 'white',
-      margin: 0
-    },
-    subtitle: {
-      fontSize: '14px',
-      color: '#9ca3af',
-      margin: 0
-    },
-    networkBadge: {
-      padding: '4px 12px',
-      backgroundColor: '#374151',
-      borderRadius: '20px',
-      fontSize: '12px'
-    },
-    errorBox: {
-      marginBottom: '16px',
-      padding: '12px',
-      backgroundColor: 'rgba(153, 27, 27, 0.5)',
-      border: '1px solid #dc2626',
-      borderRadius: '8px',
-      display: 'flex',
-      alignItems: 'center',
-      gap: '8px',
-      color: '#fca5a5'
-    },
-    connectSection: {
-      textAlign: 'center' as const,
-      padding: '32px 0'
-    },
-    connectIcon: {
-      fontSize: '64px',
-      marginBottom: '16px'
-    },
-    connectTitle: {
-      fontSize: '20px',
-      fontWeight: '600',
-      marginBottom: '8px'
-    },
-    connectDescription: {
-      color: '#9ca3af',
-      marginBottom: '24px'
-    },
-    connectNote: {
-      fontSize: '14px',
-      color: '#6b7280',
-      marginBottom: '24px'
-    },
-    connectButton: {
-      backgroundColor: '#2563eb',
-      color: 'white',
-      fontWeight: '600',
-      padding: '12px 24px',
-      borderRadius: '8px',
-      border: 'none',
-      cursor: 'pointer',
-      display: 'inline-flex',
-      alignItems: 'center',
-      gap: '8px',
-      transition: 'all 0.2s',
-      fontSize: '16px'
-    },
-    connectButtonDisabled: {
-      opacity: 0.5,
-      cursor: 'not-allowed'
-    },
-    spinner: {
-      width: '20px',
-      height: '20px',
-      border: '2px solid white',
-      borderTop: '2px solid transparent',
-      borderRadius: '50%',
-      animation: 'spin 1s linear infinite'
-    },
-    connectedSection: {
-      display: 'flex',
-      flexDirection: 'column' as const,
-      gap: '24px'
-    },
-    walletInfo: {
-      backgroundColor: 'rgba(31, 41, 55, 0.5)',
-      borderRadius: '8px',
-      padding: '16px',
-      border: '1px solid #374151',
-      display: 'flex',
-      alignItems: 'center',
-      justifyContent: 'space-between'
-    },
-    walletInfoLeft: {
-      display: 'flex',
-      alignItems: 'center',
-      gap: '12px'
-    },
-    walletAddress: {
-      fontFamily: 'monospace',
-      fontSize: '18px'
-    },
-    disconnectButton: {
-      padding: '8px 16px',
-      backgroundColor: '#374151',
-      borderRadius: '8px',
-      fontSize: '14px',
-      border: 'none',
-      color: 'white',
-      cursor: 'pointer',
-      transition: 'all 0.2s'
-    },
-    statsGrid: {
-      display: 'grid',
-      gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
-      gap: '16px'
-    },
-    statCard: {
-      backgroundColor: 'rgba(31, 41, 55, 0.5)',
-      borderRadius: '8px',
-      padding: '16px',
-      border: '1px solid #374151'
-    },
-    statHeader: {
-      display: 'flex',
-      alignItems: 'center',
-      gap: '12px',
-      marginBottom: '8px'
-    },
-    statTitle: {
-      fontWeight: '600'
-    },
-    statValue: {
-      fontSize: '32px',
-      fontWeight: 'bold'
-    },
-    statSmallTitle: {
-      fontWeight: '600',
-      fontSize: '14px',
-      color: '#9ca3af',
-      marginBottom: '4px'
-    },
-    statSmallValue: {
-      fontSize: '20px',
-      fontWeight: 'bold'
-    },
-    actionButtons: {
-      display: 'flex',
-      gap: '16px'
-    },
-    actionButton: {
-      flex: 1,
-      fontWeight: '600',
-      padding: '12px 16px',
-      borderRadius: '8px',
-      border: 'none',
-      color: 'white',
-      cursor: 'pointer',
-      display: 'flex',
-      alignItems: 'center',
-      justifyContent: 'center',
-      gap: '8px',
-      fontSize: '16px',
-      transition: 'all 0.2s'
-    },
-    lendButton: {
-      background: 'linear-gradient(135deg, #059669 0%, #047857 100%)'
-    },
-    borrowButton: {
-      background: 'linear-gradient(135deg, #7c3aed 0%, #6d28d9 100%)'
-    }
-  };
-
-  return (
-    <>
-      <style>{`
-        @keyframes spin {
-          0% { transform: rotate(0deg); }
-          100% { transform: rotate(360deg); }
-        }
-        
-        .hover-button:hover {
-          opacity: 0.9;
-          transform: translateY(-1px);
-        }
-        
-        .disconnect-button:hover {
-          background-color: #4b5563 !important;
-        }
-      `}</style>
-
-      <div style={styles.container}>
-        {/* Header */}
-        <div style={styles.header}>
-          <div style={styles.headerLeft}>
-            <div style={styles.logoBox}>
+  // Show loading screen if client part is not loaded
+  if (!mounted) {
+    return (
+      <div
+        style={{
+          maxWidth: "800px",
+          margin: "32px auto",
+          padding: "24px",
+          background: "linear-gradient(135deg, #1f2937 0%, #111827 100%)",
+          color: "#f9fafb",
+          borderRadius: "12px",
+          boxShadow: "0 25px 50px -12px rgba(0, 0, 0, 0.25)",
+          border: "1px solid #374151",
+          fontFamily: "system-ui, -apple-system, sans-serif",
+        }}
+      >
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            marginBottom: "24px",
+          }}
+        >
+          <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
+            <div
+              style={{
+                padding: "8px",
+                backgroundColor: "#2563eb",
+                borderRadius: "8px",
+                fontSize: "20px",
+              }}
+            >
               <span>📈</span>
             </div>
             <div>
-              <h1 style={styles.title}>StellarMicroLend</h1>
-              <p style={styles.subtitle}>P2P Mikro Kredi Platformu</p>
+              <h1
+                style={{
+                  fontSize: "24px",
+                  fontWeight: "bold",
+                  color: "white",
+                  margin: 0,
+                }}
+              >
+                Stellar Micro Lend
+              </h1>
+              <p
+                style={{
+                  fontSize: "14px",
+                  color: "#9ca3af",
+                  margin: 0,
+                }}
+              >
+                P2P Micro Credit Platform
+              </p>
             </div>
           </div>
+        </div>
+        <div style={{ textAlign: "center", padding: "32px 0" }}>
+          <div style={{ fontSize: "64px", marginBottom: "16px" }}>⏳</div>
+          <h2
+            style={{
+              fontSize: "20px",
+              fontWeight: "600",
+              marginBottom: "8px",
+            }}
+          >
+            Loading...
+          </h2>
+        </div>
+      </div>
+    );
+  }
 
-          {network !== "UNKNOWN" && (
-            <div style={styles.networkBadge}>
-              {network} Ağı
-            </div>
-          )}
+  return (
+    <div
+      style={{
+        maxWidth: "800px",
+        margin: "32px auto",
+        padding: "24px",
+        background: "linear-gradient(135deg, #1f2937 0%, #111827 100%)",
+        color: "#f9fafb",
+        borderRadius: "12px",
+        boxShadow: "0 25px 50px -12px rgba(0, 0, 0, 0.25)",
+        border: "1px solid #374151",
+        fontFamily: "system-ui, -apple-system, sans-serif",
+      }}
+    >
+      {/* title */}
+      <div
+        style={{
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+          marginBottom: "24px",
+        }}
+      >
+        <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
+          <div
+            style={{
+              padding: "8px",
+              backgroundColor: "#2563eb",
+              borderRadius: "8px",
+              fontSize: "20px",
+            }}
+          >
+            <span>📈</span>
+          </div>
+          <div>
+            <h1
+              style={{
+                fontSize: "24px",
+                fontWeight: "bold",
+                color: "white",
+                margin: 0,
+              }}
+            >
+              Stellar MicroLend
+            </h1>
+            <p
+              style={{
+                fontSize: "14px",
+                color: "#9ca3af",
+                margin: 0,
+              }}
+            >
+              P2P Micro Credit Platform
+            </p>
+          </div>
         </div>
 
-        {/* Error Display */}
-        {error && (
-          <div style={styles.errorBox}>
-            <span>⚠️</span>
-            <span>{error}</span>
-          </div>
-        )}
-
-        {/* Wallet Connection Status */}
-        {!publicKey ? (
-          <div style={styles.connectSection}>
-            <div style={styles.connectIcon}>💼</div>
-            <h2 style={styles.connectTitle}>Cüzdan Bağlantısı</h2>
-            <p style={styles.connectDescription}>
-              Kredi işlemlerine başlamak için Freighter cüzdanınızı bağlayın
-            </p>
-            <p style={styles.connectNote}>
-              Butona tıkladığınızda Freighter cüzdanı açılacak ve bağlantı izni isteyecektir.
-            </p>
-
-            <button
-              onClick={handleConnectWallet}
-              disabled={isConnecting}
-              style={{
-                ...styles.connectButton,
-                ...(isConnecting ? styles.connectButtonDisabled : {})
-              }}
-              className={!isConnecting ? "hover-button" : ""}
-            >
-              {isConnecting ? (
-                <>
-                  <div style={styles.spinner}></div>
-                  <span>Bağlanıyor...</span>
-                </>
-              ) : (
-                <>
-                  <span>💼</span>
-                  <span>Freighter Cüzdanını Bağla</span>
-                </>
-              )}
-            </button>
-          </div>
-        ) : (
-          <div style={styles.connectedSection}>
-            {/* Connected Wallet Info */}
-            <div style={styles.walletInfo}>
-              <div style={styles.walletInfoLeft}>
-                <span style={{ color: '#10b981', fontSize: '20px' }}>✅</span>
-                <div>
-                  <p style={{ fontSize: '14px', color: '#9ca3af', margin: 0 }}>Bağlı Cüzdan</p>
-                  <p style={{ ...styles.walletAddress, margin: 0 }}>{truncateAddress(publicKey)}</p>
-                </div>
-              </div>
-              <button
-                onClick={handleDisconnect}
-                style={styles.disconnectButton}
-                className="disconnect-button"
-              >
-                Bağlantıyı Kes
-              </button>
-            </div>
-
-            {/* User Profile Stats */}
-            {userProfile && (
-              <div style={styles.statsGrid}>
-                {/* Credit Score Card */}
-                <div style={styles.statCard}>
-                  <div style={styles.statHeader}>
-                    <span style={{ color: '#3b82f6', fontSize: '18px' }}>🛡️</span>
-                    <h3 style={{ ...styles.statTitle, margin: 0 }}>Kredi Notu</h3>
-                  </div>
-                  <div style={{ display: 'flex', alignItems: 'end', gap: '8px' }}>
-                    <span style={{
-                      ...styles.statValue,
-                      color: getCreditScoreColor(userProfile.creditScore)
-                    }}>
-                      {userProfile.creditScore}
-                    </span>
-                    <span style={{
-                      fontSize: '14px',
-                      color: getCreditScoreColor(userProfile.creditScore)
-                    }}>
-                      {getCreditScoreLabel(userProfile.creditScore)}
-                    </span>
-                  </div>
-                </div>
-
-                {/* Active Loans */}
-                <div style={styles.statCard}>
-                  <div style={styles.statHeader}>
-                    <span style={{ color: '#10b981', fontSize: '18px' }}>👥</span>
-                    <h3 style={{ ...styles.statTitle, margin: 0 }}>Aktif Krediler</h3>
-                  </div>
-                  <span style={{ ...styles.statValue, color: '#10b981' }}>
-                    {userProfile.activeLoans}
-                  </span>
-                </div>
-
-                {/* Total Lent */}
-                <div style={styles.statCard}>
-                  <h3 style={styles.statSmallTitle}>Toplam Verilen</h3>
-                  <span style={{ ...styles.statSmallValue, color: '#3b82f6' }}>
-                    {userProfile.totalLent.toLocaleString()} USDC
-                  </span>
-                </div>
-
-                {/* Total Borrowed */}
-                <div style={styles.statCard}>
-                  <h3 style={styles.statSmallTitle}>Toplam Alınan</h3>
-                  <span style={{ ...styles.statSmallValue, color: '#8b5cf6' }}>
-                    {userProfile.totalBorrowed.toLocaleString()} USDC
-                  </span>
-                </div>
-              </div>
-            )}
-
-            {/* Action Buttons */}
-            <div style={styles.actionButtons}>
-              <button
-                style={{ ...styles.actionButton, ...styles.lendButton }}
-                className="hover-button"
-              >
-                <span>💰</span>
-                <span>Kredi Ver</span>
-              </button>
-              <button
-                style={{ ...styles.actionButton, ...styles.borrowButton }}
-                className="hover-button"
-              >
-                <span>🏦</span>
-                <span>Kredi Al</span>
-              </button>
-            </div>
+        {/* connected network */}
+        {userProfile?.network && (
+          <div
+            style={{
+              padding: "4px 12px",
+              backgroundColor: "#374151",
+              borderRadius: "20px",
+              fontSize: "12px",
+            }}
+          >
+            {userProfile.network.toUpperCase()} Ağı
           </div>
         )}
       </div>
-    </>
+
+      {/* error message */}
+      {error && (
+        <div
+          style={{
+            marginBottom: "16px",
+            padding: "12px",
+            backgroundColor: "rgba(153, 27, 27, 0.5)",
+            border: "1px solid #dc2626",
+            borderRadius: "8px",
+            display: "flex",
+            alignItems: "center",
+            gap: "8px",
+            color: "#fca5a5",
+          }}
+        >
+          <span>⚠️</span>
+          <span>{error}</span>
+        </div>
+      )}
+
+      {/* Connection screen for wallet */}
+      {!userProfile ? (
+        <div style={{ textAlign: "center", padding: "32px 0" }}>
+          <div style={{ fontSize: "64px", marginBottom: "16px" }}>
+            {isFreighterAvailable ? "💼" : "❌"}
+          </div>
+          <h2
+            style={{ fontSize: "20px", fontWeight: "600", marginBottom: "8px" }}
+          >
+            {isFreighterAvailable ? "Wallet Connection" : "Cannot detect freighter"}
+          </h2>
+          <p style={{ color: "#9ca3af", marginBottom: "24px" }}>
+            {isFreighterAvailable
+              ? "Please connect your wallet to start credit process."
+              : "Please install Freighter and reload page."}
+          </p>
+
+          {isFreighterAvailable && (
+            <>
+              <p
+                style={{
+                  fontSize: "14px",
+                  color: "#6b7280",
+                  marginBottom: "24px",
+                }}
+              >
+                When you click the button, the Freighter wallet will open and ask for connection permission.
+              </p>
+
+              <button
+                onClick={handleConnectWallet}
+                disabled={isConnecting}
+                style={{
+                  backgroundColor: "#2563eb",
+                  color: "white",
+                  fontWeight: "600",
+                  padding: "12px 24px",
+                  borderRadius: "8px",
+                  border: "none",
+                  cursor: isConnecting ? "not-allowed" : "pointer",
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: "8px",
+                  fontSize: "16px",
+                  opacity: isConnecting ? 0.5 : 1,
+                }}
+              >
+                {isConnecting ? (
+                  <>
+                    <div
+                      style={{
+                        width: "20px",
+                        height: "20px",
+                        border: "2px solid white",
+                        borderTop: "2px solid transparent",
+                        borderRadius: "50%",
+                        animation: "spin 1s linear infinite",
+                      }}
+                    ></div>
+                    <span>Connecting...</span>
+                  </>
+                ) : (
+                  <>
+                    <span>💼</span>
+                    <span>Connect Freighter Wallet</span>
+                  </>
+                )}
+              </button>
+            </>
+          )}
+        </div>
+      ) : (
+        // If wallet connected, action cards
+        <div style={{ display: "flex", flexDirection: "column", gap: "24px" }}>
+          {/* connected wallet info */}
+          <div
+            style={{
+              backgroundColor: "rgba(31, 41, 55, 0.5)",
+              borderRadius: "8px",
+              padding: "16px",
+              border: "1px solid #374151",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between",
+            }}
+          >
+            <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
+              <span style={{ color: "#10b981", fontSize: "20px" }}>✅</span>
+              <div>
+                <p style={{ fontSize: "14px", color: "#9ca3af", margin: 0 }}>
+                  Connected Wallet
+                </p>
+                <p
+                  style={{
+                    fontFamily: "monospace",
+                    fontSize: "18px",
+                    margin: 0,
+                  }}
+                >
+                  {truncateAddress(userProfile.walletAddress)}
+                </p>
+              </div>
+            </div>
+            <button
+              onClick={handleDisconnect}
+              style={{
+                padding: "8px 16px",
+                backgroundColor: "#374151",
+                borderRadius: "8px",
+                fontSize: "14px",
+                border: "none",
+                color: "white",
+                cursor: "pointer",
+              }}
+
+            >
+              Disconnect Wallet
+            </button>
+          </div>
+
+          {/* Profile stats */}
+          <div
+            style={{
+              display: "grid",
+              gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))",
+              gap: "16px",
+            }}
+          >
+            {/* credit note card */}
+            <div
+              style={{
+                backgroundColor: "rgba(31, 41, 55, 0.5)",
+                borderRadius: "8px",
+                padding: "16px",
+                border: "1px solid #374151",
+              }}
+            >
+              <div
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "12px",
+                  marginBottom: "8px",
+                }}
+              >
+                <span style={{ color: "#3b82f6", fontSize: "18px" }}>🛡️</span>
+                <h3 style={{ fontWeight: "600", margin: 0 }}>Credit Grade</h3>
+              </div>
+              <div style={{ display: "flex", alignItems: "end", gap: "8px" }}>
+                <span
+                  style={{
+                    fontSize: "32px",
+                    fontWeight: "bold",
+                    color: getCreditScoreColor(userProfile.creditScore),
+                  }}
+                >
+                  {userProfile.creditScore}
+                </span>
+                <span
+                  style={{
+                    fontSize: "14px",
+                    color: getCreditScoreColor(userProfile.creditScore),
+                  }}
+                >
+                  {getCreditScoreLabel(userProfile.creditScore)}
+                </span>
+              </div>
+            </div>
+
+            {/* active credits card */}
+            <div
+              style={{
+                backgroundColor: "rgba(31, 41, 55, 0.5)",
+                borderRadius: "8px",
+                padding: "16px",
+                border: "1px solid #374151",
+              }}
+            >
+              <div
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "12px",
+                  marginBottom: "8px",
+                }}
+              >
+                <span style={{ color: "#10b981", fontSize: "18px" }}>👥</span>
+                <h3 style={{ fontWeight: "600", margin: 0 }}>Active Credits</h3>
+              </div>
+              <span
+                style={{
+                  fontSize: "32px",
+                  fontWeight: "bold",
+                  color: "#10b981",
+                }}
+              >
+                {userProfile.activeLoans}
+              </span>
+            </div>
+
+            {/* Total given card */}
+            <div
+              style={{
+                backgroundColor: "rgba(31, 41, 55, 0.5)",
+                borderRadius: "8px",
+                padding: "16px",
+                border: "1px solid #374151",
+              }}
+            >
+              <h3
+                style={{
+                  fontWeight: "600",
+                  fontSize: "14px",
+                  color: "#9ca3af",
+                  margin: "0 0 4px 0",
+                }}
+              >
+                Total Given
+              </h3>
+              <span
+                style={{
+                  fontSize: "20px",
+                  fontWeight: "bold",
+                  color: "#3b82f6",
+                }}
+              >
+                {userProfile.totalLent.toLocaleString()} XLM
+              </span>
+            </div>
+
+            {/* total get card */}
+            <div
+              style={{
+                backgroundColor: "rgba(31, 41, 55, 0.5)",
+                borderRadius: "8px",
+                padding: "16px",
+                border: "1px solid #374151",
+              }}
+            >
+              <h3
+                style={{
+                  fontWeight: "600",
+                  fontSize: "14px",
+                  color: "#9ca3af",
+                  margin: "0 0 4px 0",
+                }}
+              >
+                Total Get
+              </h3>
+              <span
+                style={{
+                  fontSize: "20px",
+                  fontWeight: "bold",
+                  color: "#8b5cf6",
+                }}
+              >
+                {userProfile.totalBorrowed.toLocaleString()} XLM
+              </span>
+            </div>
+          </div>
+
+          {/* action buttons */}
+          <div style={{ display: "flex", gap: "16px" }}>
+            <button
+              style={{
+                flex: 1,
+                fontWeight: "600",
+                padding: "12px 16px",
+                borderRadius: "8px",
+                border: "none",
+                color: "white",
+                cursor: "pointer",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                gap: "8px",
+                fontSize: "16px",
+                background: "linear-gradient(135deg, #059669 0%, #047857 100%)",
+              }}
+            >
+              <span>💰</span>
+              <span>Give Credit</span>
+            </button>
+            <button
+              style={{
+                flex: 1,
+                fontWeight: "600",
+                padding: "12px 16px",
+                borderRadius: "8px",
+                border: "none",
+                color: "white",
+                cursor: "pointer",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                gap: "8px",
+                fontSize: "16px",
+                background: "linear-gradient(135deg, #7c3aed 0%, #6d28d9 100%)",
+              }}
+            >
+              <span>🏦</span>
+              <span>Get Credit</span>
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* CSS Animation definiton */}
+      <style jsx>{`
+        @keyframes spin {
+          0% {
+            transform: rotate(0deg);
+          }
+          100% {
+            transform: rotate(360deg);
+          }
+        }
+      `}</style>
+    </div>
   );
+
 }
