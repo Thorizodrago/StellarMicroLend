@@ -1,36 +1,70 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# 🏗️ Core Technologies
 
-## Getting Started
+#### Frontend: 
+<code> Next.js + React + Tailwind CSS </code>
 
-First, run the development server:
+#### Wallet Integration: 
+<code> @stellar/freighter-api </code>
 
-```bash
+#### Smart Contracts: 
+<code> Rust (Soroban SDK) </code>
+
+# 🔑 How to Connect Your Wallet
+
+#### 1- Install the Freighter Wallet Extension
+#### 2- Open the app.
+#### 3- Click on "Freighter Cüzdanını Bağla"
+#### 4- Grant permission via Freighter.
+
+You'll see a live mock-up of your:
+
+    Wallet Address (shortened)
+
+    Network
+
+    Credit Score (color coded)
+
+    Lending / Borrowing Stats
+
+# 🧪 Development
+### 📦 Install dependencies
+<pre>
+<code>
+cd app 
+npm install 
+</pre>
+</code>
+🚀 Run Next.js frontend
+
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
-```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+🛠️ Build & deploy Soroban contracts (optional)
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+cd contract
+soroban build
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+📸 UI Snapshot
 
-## Learn More
+    🖥️ Elegant dark UI, adaptive layout with intuitive feedback
 
-To learn more about Next.js, take a look at the following resources:
+# 📌 Future Work
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+    ✅ Real-time loan contracts
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+    🔍 Credit analysis based on actual on-chain behavior
 
-## Deploy on Vercel
+    🌍 Deploy to Futurenet/Testnet
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+    🧠 Use machine learning for credit scoring (as a service)
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+# 🤝 Contributing
+
+    Fork this repo
+
+    Create a new branch: git checkout -b feature-name
+
+    Make your changes
+
+    Push and create a PR
+
+Built with ❤️ by efyilmaz for the Stellar Hackathon.
