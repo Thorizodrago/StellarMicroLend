@@ -1,3 +1,13 @@
+# StellarMicroLend
+
+**StellarMicroLend** is a decentralized micro-lending platform built on the Stellar blockchain. It enables individuals and small businesses to request and provide microloans with transparency, low fees, and blockchain-backed trust. With smart contract support and wallet integration, users can interact with real on-chain credit systems in a simple, user-friendly interface.
+
+## 🚀 Purpose
+
+The goal of this project is to facilitate access to financial services in underserved communities by offering a lightweight lending protocol on the Stellar network. By using blockchain transaction history, a more accurate and transparent credit score can be generated for users — enabling safer loan decisions.
+
+---
+
 # 🏗️ Core Technologies
 
 #### Frontend: 
